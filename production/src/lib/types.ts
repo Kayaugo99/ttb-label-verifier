@@ -18,11 +18,17 @@ export interface ExtractedLabel {
   netContents: string | null;
   producerNameAddress: string | null;
   governmentWarning: {
-    /** Full warning text as printed, or null if none found. */
-    text: string | null;
-    /** Is the literal "GOVERNMENT WARNING:" label in ALL CAPS? */
-    isAllCaps: boolean | null;
-    /** Is the literal "GOVERNMENT WARNING:" label bold relative to nearby text? */
+    /** Is any government warning visible on the label at all? */
+    present: boolean;
+    /**
+     * The "GOVERNMENT WARNING" heading exactly as printed, with original casing
+     * preserved (e.g. "GOVERNMENT WARNING:" or "Government Warning:"), or null if
+     * there is no such heading. Casing is checked deterministically from this.
+     */
+    headingAsPrinted: string | null;
+    /** Full warning text as printed (heading + body), or null if none found. */
+    fullText: string | null;
+    /** Is the heading bold relative to nearby text? Visual signal; null if unsure. */
     isBold: boolean | null;
     /** Could the warning be read clearly at all? */
     legible: boolean;

@@ -12,8 +12,9 @@ application data ─────────────────────
                                                          └─► per-field verdict + overall verdict
 ```
 
-The model returns **structured JSON** (not prose): each field's value, plus for the warning, the raw
-text and booleans for `isAllCaps` / `isBold` / `isLegible`. All matching decisions happen in code.
+The model returns **structured JSON** (not prose): each field's value, plus for the warning, the
+verbatim heading + full text and flags (`present` / `isBold` / `legible`). All matching decisions —
+including the ALL-CAPS check, derived textually from the verbatim heading — happen in code.
 
 ## Verdict vocabulary
 
@@ -52,19 +53,27 @@ Parse value + unit, convert to mL. `750 mL` == `75 cL` == `0.75 L` → **PASS**.
 Mismatch → **FAIL**.
 
 ### Government Warning — EXACT (the strict one)
-Three independent checks, all must pass:
-1. **Presence + wording.** Normalize whitespace, then verify the warning contains the required
-   two-part text. Use a tolerant-but-strict comparison: ignore whitespace/line-break differences,
-   but reworded/abbreviated/missing clauses → **FAIL**.
-2. **`GOVERNMENT WARNING:` is ALL CAPS.** From the model's `isAllCaps`. Title case → **FAIL**.
-3. **`GOVERNMENT WARNING:` is BOLD.** From the model's `isBold`. Not bold → **FAIL**.
+The model reports: `present` (is any warning visible), `headingAsPrinted` (the heading **verbatim**,
+case preserved), `fullText`, `isBold`, and `legible`. The code then decides, in order:
 
-Any of the three failing ⇒ warning **FAIL** with a specific reason
-("Warning present but 'Government Warning' is not in all caps"). If the model can't read it at all →
-**NEEDS REVIEW** ("warning not legible — request a clearer image").
+1. **Absent.** `present === false` → **FAIL** ("no government warning found — it is mandatory"). This
+   is distinct from unreadable, so a genuinely missing warning fails rather than asking for a retake.
+2. **Unreadable.** present but `!legible`/no text → **NEEDS REVIEW** ("present but not readable —
+   request a sharper image").
+3. **Wording.** Both required clauses must be present (normalized, tolerant of whitespace; reworded/
+   abbreviated/missing clauses → **FAIL**).
+4. **Heading + ALL CAPS — deterministic.** The heading must exist and be all-caps, checked
+   *textually* from `headingAsPrinted` (`heading === heading.toUpperCase()`). "Government Warning" in
+   title case → **FAIL**. Capitalization is character data, so this needs no visual judgment and is
+   fully reliable.
+5. **Bold — best-effort.** `isBold === false` → **FAIL**. If bold can't be confirmed (`null`) but
+   everything else is correct → **NEEDS REVIEW** (flag, don't guess). Bold is the one inherently
+   visual signal and the weakest link; accuracy depends on model strength + image quality.
 
 > Why code, not the LLM, makes the final call: the warning verdict is a compliance decision. We want
-> it deterministic and explainable ("failed because not bold"), not a model's holistic vibe.
+> it deterministic and explainable ("failed because the heading is title case"), not a model's
+> holistic vibe. Caps is derived from transcribed text precisely so it doesn't depend on the model
+> "deciding" — only on it transcribing what it sees.
 
 ## Confidence → NEEDS REVIEW
 The model returns a per-field confidence / "couldn't read" flag. Low confidence routes to NEEDS

@@ -6,9 +6,10 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 import type { ExtractedLabel } from "./types";
 
-// Newest fast vision-capable Claude on the gateway (see README for how this was
-// chosen). Overridable via env so it can be tuned without a code change.
-const MODEL = process.env.VISION_MODEL ?? "anthropic/claude-sonnet-4.6";
+// Fast, vision-capable Claude on the gateway. Haiku 4.5 hits the ~5s budget
+// comfortably and is available on the AI Gateway free tier; bump VISION_MODEL to
+// a Sonnet/Opus tier (paid credits) for harder, lower-quality real-world photos.
+const MODEL = process.env.VISION_MODEL ?? "anthropic/claude-haiku-4.5";
 
 const labelSchema = z.object({
   brandName: z.string().nullable().describe("The brand name printed on the label, verbatim."),
@@ -26,18 +27,23 @@ const labelSchema = z.object({
     .nullable()
     .describe("Bottler/producer name and address if present."),
   governmentWarning: z.object({
-    text: z
+    present: z
+      .boolean()
+      .describe("True if any government warning statement is visible on the label; false if there is none."),
+    headingAsPrinted: z
       .string()
       .nullable()
-      .describe("The full government warning text exactly as printed, or null if absent."),
-    isAllCaps: z
-      .boolean()
+      .describe(
+        'The government-warning heading copied EXACTLY as printed, preserving original capitalization — e.g. "GOVERNMENT WARNING:" or "Government Warning:". null if there is no heading.',
+      ),
+    fullText: z
+      .string()
       .nullable()
-      .describe('Whether the literal words "GOVERNMENT WARNING" are in ALL CAPITAL LETTERS. null if unsure.'),
+      .describe("The full government warning text exactly as printed (heading + body), or null if absent."),
     isBold: z
       .boolean()
       .nullable()
-      .describe('Whether the literal words "GOVERNMENT WARNING" are bold relative to nearby text. null if unsure.'),
+      .describe('Whether the heading is bold relative to the surrounding warning text. null if you cannot tell.'),
     legible: z.boolean().describe("Whether the warning area was readable at all."),
   }),
   readabilityNotes: z
@@ -50,8 +56,12 @@ const SYSTEM = `You are a meticulous TTB alcohol-label reading assistant. You ex
 
 Critical instructions:
 - Transcribe text verbatim, preserving capitalization. Do not normalize case.
-- For the government warning, copy the text exactly. Then assess the literal heading "GOVERNMENT WARNING": is it in ALL CAPS? Is it visually bold compared to the surrounding warning text? If you genuinely cannot tell, return null for that field rather than guessing.
-- If a field is not visible or unreadable, return null (and set legible=false for the warning). Never invent a value.`;
+- Government warning:
+  - Set "present" to false ONLY if there is genuinely no warning statement anywhere on the label. If a warning exists but is hard to read, set present=true and legible=false.
+  - Copy the heading (the "GOVERNMENT WARNING" words, however they are styled) into "headingAsPrinted" EXACTLY as printed — preserve the exact capitalization you see. If it reads "Government Warning:" write that; if "GOVERNMENT WARNING:" write that. This casing matters and is checked. Use null only if there is no heading at all.
+  - Copy the entire warning into "fullText" verbatim.
+  - Judge "isBold": is the heading visually heavier/bolder than the surrounding warning body text? Use null only if you truly cannot tell.
+- If a field is not visible or unreadable, return null. Never invent a value.`;
 
 /**
  * Extract structured label fields from an image.

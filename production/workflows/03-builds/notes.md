@@ -12,8 +12,16 @@ build-time decisions that aren't obvious from the code.
 - **Structured output via AI SDK v6.** Used `generateText` + `Output.object({ schema })` (the v6
   replacement for the deprecated `generateObject`) with a Zod schema. `strictJsonSchema` is on by
   default in v6, so the model returns schema-valid JSON.
-- **Model:** `anthropic/claude-sonnet-4.6` through the Vercel AI Gateway — newest Sonnet, fast enough
-  for the ~5s budget. Overridable via `VISION_MODEL`.
+- **Model:** `anthropic/claude-haiku-4.5` through the Vercel AI Gateway — fast (warm calls ~3.7–4.8s,
+  within the ~5s budget) and available on the Gateway free tier. Overridable via `VISION_MODEL`;
+  premium Sonnet/Opus tiers require paid Gateway credits but read tougher photos and detect bold more
+  reliably.
+- **Warning detection (revised after live testing):** capitalization is checked *textually* from the
+  verbatim-transcribed heading (`heading === heading.toUpperCase()`) rather than trusting a model
+  boolean — this reliably catches title-case headings. A `present` flag separates a missing warning
+  (FAIL) from an unreadable one (NEEDS REVIEW). **Bold** remains a best-effort visual signal and is
+  the known weak spot on Haiku (a subtly-not-bold heading can slip through to PASS); documented as a
+  limitation with a paid-tier / human-review mitigation. Live sample run: 6/7 correct.
 - **Client-side downscale** to ≤1600px before upload (`lib/client.ts`) — cuts upload + inference time
   to protect the 5s budget, and keeps requests well under the 12 MB server limit.
 - **Batch concurrency = 6** with streaming results, so a 300-label batch doesn't block on the whole

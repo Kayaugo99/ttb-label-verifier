@@ -49,8 +49,9 @@ describe("parseVolumeToMl", () => {
 
 function warning(over: Partial<ExtractedLabel["governmentWarning"]> = {}) {
   return checkWarning({
-    text: CANONICAL_WARNING,
-    isAllCaps: true,
+    present: true,
+    headingAsPrinted: "GOVERNMENT WARNING:",
+    fullText: CANONICAL_WARNING,
     isBold: true,
     legible: true,
     ...over,
@@ -61,8 +62,8 @@ describe("government warning (the strict one)", () => {
   it("PASS when present, worded right, bold + all caps", () => {
     expect(warning().verdict).toBe("PASS");
   });
-  it("FAIL when GOVERNMENT WARNING is title case (not all caps)", () => {
-    const r = warning({ isAllCaps: false });
+  it("FAIL when the heading is title case (not all caps)", () => {
+    const r = warning({ headingAsPrinted: "Government Warning:" });
     expect(r.verdict).toBe("FAIL");
     expect(r.reason).toMatch(/capital/i);
   });
@@ -71,17 +72,28 @@ describe("government warning (the strict one)", () => {
     expect(r.verdict).toBe("FAIL");
     expect(r.reason).toMatch(/bold/i);
   });
+  it("FAIL when the warning is absent entirely", () => {
+    const r = warning({ present: false, headingAsPrinted: null, fullText: null });
+    expect(r.verdict).toBe("FAIL");
+    expect(r.reason).toMatch(/mandatory|no government warning/i);
+  });
   it("FAIL when a required clause is missing", () => {
     const r = warning({
-      text: "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink during pregnancy.",
+      fullText:
+        "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink during pregnancy.",
     });
     expect(r.verdict).toBe("FAIL");
   });
-  it("NEEDS_REVIEW when illegible", () => {
-    expect(warning({ legible: false, text: null }).verdict).toBe("NEEDS_REVIEW");
+  it("FAIL when the heading is missing but body present", () => {
+    const r = warning({ headingAsPrinted: null });
+    expect(r.verdict).toBe("FAIL");
+    expect(r.reason).toMatch(/heading is missing/i);
   });
-  it("NEEDS_REVIEW when styling unknown but wording correct", () => {
-    expect(warning({ isAllCaps: null, isBold: null }).verdict).toBe("NEEDS_REVIEW");
+  it("NEEDS_REVIEW when present but illegible", () => {
+    expect(warning({ legible: false, fullText: null }).verdict).toBe("NEEDS_REVIEW");
+  });
+  it("NEEDS_REVIEW when bold unknown but wording + caps correct", () => {
+    expect(warning({ isBold: null }).verdict).toBe("NEEDS_REVIEW");
   });
   it("canonical clauses are substrings of the normalized warning", () => {
     expect(normalize(CANONICAL_WARNING)).toContain(WARNING_CLAUSE_1);
@@ -102,7 +114,13 @@ describe("verifyLabel end-to-end (pure)", () => {
     alcoholContent: "45% ALC./VOL.",
     netContents: "75 cL",
     producerNameAddress: "Old Tom Distillery, Bardstown, KY",
-    governmentWarning: { text: CANONICAL_WARNING, isAllCaps: true, isBold: true, legible: true },
+    governmentWarning: {
+      present: true,
+      headingAsPrinted: "GOVERNMENT WARNING:",
+      fullText: CANONICAL_WARNING,
+      isBold: true,
+      legible: true,
+    },
     readabilityNotes: null,
   };
 

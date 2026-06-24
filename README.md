@@ -47,9 +47,22 @@ Browser (Next.js client)                      Server (Route Handler)
 ```
 
 - **Framework:** Next.js (App Router, TypeScript) + Tailwind CSS — one deploy unit for UI + API.
-- **Vision:** Claude (`anthropic/claude-sonnet-4.6` by default) via the **Vercel AI Gateway**, using
-  the AI SDK v6 `generateText` + `Output.object` for schema-validated extraction.
+- **Vision:** Claude (`anthropic/claude-haiku-4.5` by default) via the **Vercel AI Gateway**, using
+  the AI SDK v6 `generateText` + `Output.object` for schema-validated extraction. Haiku is fast
+  (fits the ~5s budget) and runs on the Gateway free tier; set `VISION_MODEL` to a Sonnet/Opus tier
+  for tougher photos or stricter bold-detection.
 - **No persistence:** images and application data are processed in memory and never stored.
+
+### How the Government Warning check stays reliable
+
+Capitalization is **textual**, not just visual — so the model transcribes the `GOVERNMENT WARNING`
+heading *verbatim* and the code checks `heading === heading.toUpperCase()` deterministically (this
+catches "Government Warning" in title case every time). A `present` flag distinguishes a genuinely
+**missing** warning (FAIL) from one that's merely **unreadable** (NEEDS REVIEW). **Bold** is the one
+inherently-visual signal: it's a best-effort model judgment and the weakest link — on the free-tier
+Haiku model a subtle bold difference can be missed. The deterministic wording + caps checks are the
+reliable guardrail; bold enforcement improves with a paid Sonnet/Opus tier, and anything uncertain
+falls to NEEDS REVIEW rather than a false pass.
 
 ```
 production/src/
@@ -112,8 +125,10 @@ required for the deployed app.
 - **Cloud vision is acceptable for this externally-hosted POC.** The IT stakeholder noted the
   internal TTB network blocks many outbound ML endpoints — so a real internal deployment would need
   an approved or on-prem inference path. Flagged here intentionally.
-- **Bold/caps detection** relies on the vision model's visual assessment, returned as explicit
-  booleans. If the model is unsure, the field becomes NEEDS REVIEW instead of a guess.
+- **Caps detection is deterministic** (from the verbatim-transcribed heading); **bold detection** is
+  a best-effort visual judgment by the model and the known weak spot — see the box above. On a
+  sample set, the default Haiku model correctly handled 6/7 cases, missing only a subtly-not-bold
+  heading; the textual caps and wording checks were reliable.
 - **Image quality:** images are downscaled client-side to keep within the ~5s budget. Severely
   degraded photos resolve to NEEDS REVIEW ("request a clearer image") rather than a false verdict.
 - **Scope:** we verify presence + wording + caps + bold for the warning, not millimeter type-height

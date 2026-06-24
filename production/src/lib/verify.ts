@@ -215,70 +215,92 @@ function clausePresence(haystack: string, needle: string): number {
   return hit / nTokens.length;
 }
 
+/** True if the alphabetic characters in `s` are all uppercase (and there is at least one). */
+export function isAllCaps(s: string): boolean {
+  const letters = s.replace(/[^a-zA-Z]/g, "");
+  return letters.length > 0 && letters === letters.toUpperCase();
+}
+
 export function checkWarning(w: ExtractedLabel["governmentWarning"]): FieldResult {
   const base = {
     field: "governmentWarning",
     label: "Government Health Warning",
     expected: "Exact TTB warning, “GOVERNMENT WARNING:” in bold ALL CAPS",
-    found: w.text,
+    found: w.fullText ?? w.headingAsPrinted,
   };
 
-  if (!w.legible || !w.text || normalize(w.text) === "") {
+  // 1. Absent entirely — a compliance failure, not an unreadable image.
+  if (!w.present) {
+    return {
+      ...base,
+      verdict: "FAIL",
+      reason: "No government warning statement was found on the label. It is mandatory.",
+    };
+  }
+
+  // 2. Present but unreadable — defer to a human.
+  if (!w.legible || !w.fullText || normalize(w.fullText) === "") {
     return {
       ...base,
       verdict: "NEEDS_REVIEW",
-      reason: "Warning not legible — request a clearer image.",
+      reason: "A warning is present but could not be read clearly — request a sharper image.",
     };
   }
 
-  // 1. Wording (the two required clauses).
-  const c1 = clausePresence(w.text, WARNING_CLAUSE_1);
-  const c2 = clausePresence(w.text, WARNING_CLAUSE_2);
-  const hasPrefix = normalize(w.text).includes("government warning");
-
-  if (c1 === 1 && c2 === 1 && hasPrefix) {
-    // Wording is correct — now the visual rules.
-    const reasons: string[] = [];
-    if (w.isAllCaps === false) reasons.push("“GOVERNMENT WARNING” is not in all capital letters");
-    if (w.isBold === false) reasons.push("“GOVERNMENT WARNING” is not bold");
-    if (reasons.length > 0) {
-      return {
-        ...base,
-        verdict: "FAIL",
-        reason: `Warning text is correct, but ${reasons.join(" and ")} — both are required by TTB.`,
-      };
-    }
-    if (w.isAllCaps == null || w.isBold == null) {
-      return {
-        ...base,
-        verdict: "NEEDS_REVIEW",
-        reason:
-          "Warning text is correct, but the caps/bold styling could not be confirmed from the image — a human should verify.",
-      };
-    }
+  // 3. Wording (the two required clauses).
+  const c1 = clausePresence(w.fullText, WARNING_CLAUSE_1);
+  const c2 = clausePresence(w.fullText, WARNING_CLAUSE_2);
+  if (c1 < 0.85 || c2 < 0.85) {
+    const missing: string[] = [];
+    if (c1 < 0.85) missing.push("the Surgeon General / pregnancy clause");
+    if (c2 < 0.85) missing.push("the impairment / health-problems clause");
     return {
       ...base,
-      verdict: "PASS",
-      reason: "Present, correctly worded, and “GOVERNMENT WARNING:” is bold and all caps.",
+      verdict: "FAIL",
+      reason: `Warning wording is missing or altered — ${missing.join(" and ")} not found as required.`,
     };
   }
 
-  // Wording is off. Distinguish "close" (review) from "wrong/missing" (fail).
-  if (c1 >= 0.85 && c2 >= 0.85) {
+  // 4. The "GOVERNMENT WARNING" heading must exist, be ALL CAPS (textual, reliable),
+  //    and be bold (visual, best-effort).
+  const heading = w.headingAsPrinted;
+  if (!heading || !normalize(heading).includes("government warning")) {
+    return {
+      ...base,
+      verdict: "FAIL",
+      reason: "The required “GOVERNMENT WARNING:” heading is missing.",
+    };
+  }
+
+  const failures: string[] = [];
+  if (!isAllCaps(heading)) {
+    failures.push(`the heading is printed as “${heading.trim()}” rather than in all capital letters`);
+  }
+  if (w.isBold === false) {
+    failures.push("the heading is not bold");
+  }
+  if (failures.length > 0) {
+    return {
+      ...base,
+      verdict: "FAIL",
+      reason: `Warning wording is correct, but ${failures.join(" and ")} — TTB requires “GOVERNMENT WARNING:” in bold capital letters.`,
+    };
+  }
+
+  // 5. Wording + caps good; bold couldn't be confirmed → flag rather than guess.
+  if (w.isBold == null) {
     return {
       ...base,
       verdict: "NEEDS_REVIEW",
-      reason: "Warning is close to the required text but not exact — a human should verify the wording.",
+      reason:
+        "Wording and capitalization are correct, but whether the heading is bold could not be confirmed from the image — a person should verify.",
     };
   }
-  const missing: string[] = [];
-  if (!hasPrefix) missing.push("the “GOVERNMENT WARNING:” heading");
-  if (c1 < 0.85) missing.push("the Surgeon General / pregnancy clause");
-  if (c2 < 0.85) missing.push("the impairment / health-problems clause");
+
   return {
     ...base,
-    verdict: "FAIL",
-    reason: `Warning is missing or incorrectly worded — ${missing.join(", ")} not found as required.`,
+    verdict: "PASS",
+    reason: "Present, correctly worded, and “GOVERNMENT WARNING:” is in bold capital letters.",
   };
 }
 
