@@ -1,5 +1,7 @@
 # TTB Label Verifier
 
+**🔗 Live app: https://ttb-label-verifier-beta.vercel.app**
+
 An AI-powered prototype that helps TTB compliance agents verify alcohol-beverage labels against
 their applications. Upload a label photo + the application data; the app reads the label with Claude
 vision and returns a clear **per-field verdict** — brand name, class/type, alcohol content, net
