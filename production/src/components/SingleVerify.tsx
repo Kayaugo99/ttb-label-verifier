@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import type { ApplicationData, VerificationResult } from "@/lib/types";
-import { verifyOne } from "@/lib/client";
+import { verifyOne, type VerifyPhase } from "@/lib/client";
 import { Field } from "./Field";
 import { ImageDrop } from "./ImageDrop";
 import { ResultCard } from "./ResultCard";
+import { AnalyzingPanel } from "./AnalyzingPanel";
 
 const EMPTY: ApplicationData = {
   brandName: "",
@@ -18,6 +19,7 @@ export function SingleVerify() {
   const [app, setApp] = useState<ApplicationData>(EMPTY);
   const [image, setImage] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<VerifyPhase>("optimizing");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<VerificationResult | null>(null);
 
@@ -27,10 +29,11 @@ export function SingleVerify() {
   async function onVerify() {
     if (!image) return;
     setBusy(true);
+    setPhase("optimizing");
     setError(null);
     setResult(null);
     try {
-      setResult(await verifyOne(app, image));
+      setResult(await verifyOne(app, image, setPhase));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -75,11 +78,7 @@ export function SingleVerify() {
       </form>
 
       <div aria-live="polite" className="min-h-[8rem]">
-        {busy && (
-          <div className="flex h-full items-center justify-center rounded-xl bg-white p-8 text-slate-500 shadow-sm ring-1 ring-slate-200">
-            <span className="animate-pulse">Reading the label…</span>
-          </div>
-        )}
+        {busy && <AnalyzingPanel phase={phase} />}
         {error && !busy && (
           <div className="rounded-xl bg-red-50 p-4 text-red-800 ring-1 ring-red-200">{error}</div>
         )}

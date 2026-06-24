@@ -37,12 +37,19 @@ export async function downscaleImage(file: File): Promise<Blob> {
   return blob ?? file;
 }
 
-/** Verify one label image against application data. Throws on 4xx with a message. */
+/** The real phases of a single verification, in order. Used to drive accurate UI. */
+export type VerifyPhase = "optimizing" | "analyzing";
+
+/** Verify one label image against application data. Throws on 4xx with a message.
+ *  `onPhase` fires as each real phase begins, so the UI never shows a fake step. */
 export async function verifyOne(
   app: ApplicationData,
   image: File,
+  onPhase?: (phase: VerifyPhase) => void,
 ): Promise<VerificationResult> {
+  onPhase?.("optimizing");
   const downscaled = await downscaleImage(image);
+
   const form = new FormData();
   form.set("brandName", app.brandName);
   form.set("classType", app.classType);
@@ -50,6 +57,7 @@ export async function verifyOne(
   form.set("netContents", app.netContents);
   form.set("image", downscaled, image.name.replace(/\.\w+$/, "") + ".jpg");
 
+  onPhase?.("analyzing");
   const res = await fetch("/api/verify", { method: "POST", body: form });
   const data = await res.json();
   if (!res.ok && data?.error && !Array.isArray(data?.fields)) {

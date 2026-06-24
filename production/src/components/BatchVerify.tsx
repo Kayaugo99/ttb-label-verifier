@@ -5,6 +5,7 @@ import type { VerificationResult } from "@/lib/types";
 import { verifyOne, runPool } from "@/lib/client";
 import { parseManifest, resultsToCsv, MANIFEST_TEMPLATE, type BatchRow } from "@/lib/csv";
 import { VerdictBadge } from "./Verdict";
+import { Spinner } from "./Spinner";
 
 type RowState = {
   row: BatchRow;
@@ -140,6 +141,31 @@ export function BatchVerify() {
         </Step>
       </ol>
 
+      {matched > 0 && (busy || completed > 0) && (
+        <div role="status" aria-live="polite">
+          <div className="mb-1 flex items-center justify-between text-sm text-slate-600">
+            <span className="flex items-center gap-2">
+              {busy && <Spinner className="h-4 w-4" />}
+              {busy ? "Verifying labels…" : "All labels checked"}
+            </span>
+            <span className="tabular-nums">
+              {completed} / {matched} done
+            </span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-blue-600 transition-all duration-300 ease-out"
+              style={{ width: `${matched ? (completed / matched) * 100 : 0}%` }}
+              role="progressbar"
+              aria-valuenow={completed}
+              aria-valuemin={0}
+              aria-valuemax={matched}
+              aria-label="Batch verification progress"
+            />
+          </div>
+        </div>
+      )}
+
       {parseErrors.length > 0 && (
         <ul className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
           {parseErrors.map((e, i) => (
@@ -188,7 +214,10 @@ export function BatchVerify() {
                       {!r.file ? (
                         <span className="text-slate-400">No image</span>
                       ) : r.status === "running" ? (
-                        <span className="animate-pulse text-slate-500">Checking…</span>
+                        <span className="inline-flex items-center gap-1.5 text-slate-500">
+                          <Spinner className="h-4 w-4" />
+                          Checking…
+                        </span>
                       ) : r.status === "error" ? (
                         <span className="text-red-700">Error</span>
                       ) : r.result ? (
